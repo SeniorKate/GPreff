@@ -16,3 +16,5 @@ summarise_linelist <- function (linelist,
     n_cases_line_list
 
 }
+
+git remote set-url upstream git@github.com:idem-lab/GPreff.git
