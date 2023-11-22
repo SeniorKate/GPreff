@@ -9,8 +9,10 @@ R.utils::sourceDirectory('R/')
 
 module <- greta::.internals$utils$misc$module
 
+
 #get latest linelist file and target dates. Currently have to manually specify. Create local summary file
 source("R/get_linelist_and_target_dates.R")
+
 
 jurisdictions <- unique(local_summary$state)
 
@@ -20,22 +22,10 @@ PCR_matrix <- pivot_datesum_to_wide_matrix(
 RAT_matrix <- pivot_datesum_to_wide_matrix(
     local_summary, 'RAT', target_dates, jurisdictions)
 
-# get test type proportion matrices
-PCR_prop_matrix <- pivot_test_type_prop_to_wide_matrix(
-  local_summary, 'prop_PCR', target_dates)
-RAT_prop_matrix <- pivot_test_type_prop_to_wide_matrix(
-  local_summary, 'prop_RAT', target_dates)
-
-
-PCR_valid_mat <- PCR_prop_matrix > 0
-# make a valid check matrix for switching off RAT dates
-RAT_valid_mat <- make_RAT_validity_matrix(RAT_matrix)
-# condition date validity on at least 1 case being reported
-RAT_valid_mat <- RAT_valid_mat & RAT_prop_matrix > 0
-
-
-
-
+# make validity and proportion matrices
+case_data_diagnostic_output <- case_data_diagnostic(local_summary,
+                                                    target_dates,
+                                                    smoothing = "gam")
 
 n_jurisdictions <- length(jurisdictions)
 
@@ -105,14 +95,14 @@ timevarying_proportion_PCR <- prepare_proportion_correction(
     as.Date(target_dates),
     PCR_infection_days,
     timevarying_CAR_PCR,
-    PCR_prop_matrix,
+    case_data_diagnostic_output$PCR_prop_matrix,
     dow_correction_PCR$pcr_dow_correction)
 
 timevarying_proportion_RAT <- prepare_proportion_correction(
     as.Date(target_dates),
     RAT_infection_days,
     timevarying_CAR_RAT,
-    RAT_prop_matrix,
+    case_data_diagnostic_output$RAT_prop_matrix,
     dow_correction_RAT$rat_dow_correction)
 
 ############# above objects are all created based on input data, and does not
@@ -137,7 +127,7 @@ PCR_notification_model_objects <- create_model_notification_data(
     timevarying_delay_dist = PCR_notification_delay_distribution,
     timevarying_proportion = timevarying_proportion_PCR$timevarying_proportion,
     observed_data = PCR_matrix,
-    valid_mat = PCR_valid_mat,
+    valid_mat = case_data_diagnostic_output$PCR_valid_mat,
     dataID = 'pcr')
 
 RAT_notification_model_objects <- create_model_notification_data(
@@ -147,7 +137,7 @@ RAT_notification_model_objects <- create_model_notification_data(
     timevarying_delay_dist = RAT_notification_delay_distribution,
     timevarying_proportion = timevarying_proportion_RAT$timevarying_proportion,
     observed_data = RAT_matrix,
-    valid_mat = RAT_valid_mat,
+    valid_mat = case_data_diagnostic_output$RAT_valid_mat,
     dataID = 'rat')
 
 # priors for the parameters of the lognormal distribution over the serial
@@ -180,7 +170,7 @@ fit <- fit_model(model = m,
                  max_convergence_tries = 1,
                  warmup = 1000,
                  init_n_samples = 1000,
-                 iterations_per_step = 1000) # this doesn't feel like it needs to be user defined?
+                 iterations_per_step = 1000)
 
 
 
@@ -214,13 +204,13 @@ plot_timeseries_sims(case_sims_RAT[[1]],
                      type = "notification",
                      dates = as.Date(rownames(RAT_matrix)),
                      states = colnames(RAT_matrix),
-                     valid_mat = RAT_valid_mat,
+                     valid_mat = case_data_diagnostic_output$RAT_valid_mat,
                      start_date = as.Date("2023-05-01"),
                      dim = "1",
                      case_validation_data = local_summary |>
                        dplyr::rename("date" = date_confirmation,
                                      "count" = RAT),
-                     nowcast_start = as.Date("2023-11-30")) #set to future date for now so code works
+                     nowcast_start = nowcast_start)
 
 case_sims_PCR <- calculate(combined_model_objects$pcr_observed_data_array,
                            values = fit,
@@ -230,13 +220,13 @@ plot_timeseries_sims(case_sims_PCR[[1]],
                      type = "notification",
                      dates = as.Date(rownames(PCR_matrix)),
                      states = colnames(PCR_matrix),
-                     valid_mat = PCR_valid_mat,
+                     valid_mat = case_data_diagnostic_output$PCR_valid_mat,
                      start_date = as.Date(rownames(PCR_matrix)[1]),
                      dim = "1",
                      case_validation_data = local_summary |>
                        dplyr::rename("date" = date_confirmation,
                                      "count" = PCR),
-                     nowcast_start = as.Date("2023-11-30")) #set to future date for now so code works
+                     nowcast_start = nowcast_start)
 
 infection_sims <- calculate(combined_model_objects$infections_timeseries,
                             values = fit,
@@ -246,6 +236,7 @@ plot_timeseries_sims(infection_sims[[1]],
                      type = "infection",
                      dates = days_infection,
                      start_date = as.Date(rownames(PCR_matrix)[1]),
+                     end_date = as.Date(rownames(PCR_matrix)[nrow(PCR_matrix)]),
                      states = jurisdictions,
                      dim_sim = "2",
                      infection_nowcast = TRUE,

@@ -41,7 +41,8 @@ plot_timeseries_sims <- function(
     case_forecast = FALSE,
     valid_mat = NULL,
     nowcast_start = NULL,
-    dim_sim = c("1","2")
+    dim_sim = c("1","2"),
+    reff_ylim = c(0,2)
 ) {
     #check type to plot
     type <- match.arg(type)
@@ -271,8 +272,7 @@ plot_timeseries_sims <- function(
     #fix reff plot ylim
     if (type == 'reff') {
         # ylim <- c(min(df$ci_90_lo), max(df$ci_90_hi))
-        ylim <- c(0, 2)
-        p <- p + ggplot2::coord_cartesian(ylim = ylim) +
+        p <- p + ggplot2::coord_cartesian(ylim = reff_ylim) +
             ggplot2::geom_hline(yintercept = 1, linetype = 'dotted', colour = "black")
 
     }

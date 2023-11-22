@@ -1,10 +1,4 @@
-#' turn incubation period estimates from  JAMA Netw Open. 2022;5(8):e2228008.
-#' doi:10.1001/jamanetworkopen.2022.28008 to ecdfs, for a given strain.
-#'
-#' This is the first pass of the function, further data sources can be used instead, ideally with a
-#' defined parametric distribution, rather than an estimate of the mean.
-#'
-#'
+# takes estimates of incubation period from literature and make it a cdf
 #' Note that in using incubation period for modelling we should not treat it as time-varying (due to
 #' changes in the dominant variant). Maybe through vignette or some other documentation we should
 #' make it clear that this is not a time-varying biological quantity and the change in dominant
@@ -27,11 +21,12 @@ make_incubation_period_cdf <- function(
     strain <- match.arg(strain)
 
     if (strain == "Omicron") {
-        prob <- c(0.05, 0.5, 0.95)
-        estimate <- c(2.88, 3.42, 3.96)
+        # parameters estimated from
+        # https://www.eurosurveillance.org/content/10.2807/1560-7917.ES.2022.27.6.2200042
+        days <- 0:28
+        cum_density <- pweibull(days,shape = 1.5,scale = 3.6)
     }
 
-    cdf <- make_ecdf(prob, estimate)
-
+    cdf <- approxfun(days,cum_density)
     return(cdf)
 }
